@@ -24,6 +24,7 @@ import sys
 import signal
 import traceback
 import json
+import re
 import flask
 
 import tensorflow as tf
@@ -32,17 +33,32 @@ import numpy as np
 from tensorflow.python.keras.preprocessing.text import Tokenizer
 from tensorflow.python.keras.preprocessing.sequence import pad_sequences
 
-MAX_LEN = 100
-label_index = {'Business':0,'Science & Technology':1,'Entertainment':2,'Health & Medicine':3}
+MAX_LEN = 10000
+label_index = {'entertainment': 0, 'health': 1, 'sports': 2, 'us': 3, 'world': 4, 'technology': 5, 'politics': 6, 'science': 7, 'business': 8}
 prefix = '/opt/ml/'
 model_path = os.path.join(prefix, 'model')
 with open(os.path.join(model_path,'tokenizer.pickle'), 'rb') as handle:
     tokenizer = pickle.load(handle)
 
 def get_class_label(prediction):
-  for key, value in label_index.iteritems():
+  for key, value in label_index.items():
     if value == prediction[0]:
       return key
+
+
+def normalize_text(s):
+
+    # Extract spaces and punctuations with regex
+    token_pattern = r"(?u)\b\w\w+\b"
+    token_pattern = re.compile(token_pattern)
+
+    s = token_pattern.findall(s)
+
+    s = " ".join(s)
+
+    s = s.lower()
+
+    return s
 
 # A singleton for holding the model. This simply loads the model and holds it.
 # It has a predict function that does a prediction based on the model and the input data.
@@ -66,6 +82,7 @@ class ScoringService(object):
         Args:
             input (a single news headline): The data on which to do the predictions. """
         clf = cls.get_model()
+        input = normalize_text(input)
         seq = tokenizer.texts_to_sequences([input])
         d = pad_sequences(seq, maxlen=MAX_LEN)
         prediction = clf.predict_classes(np.array(d))

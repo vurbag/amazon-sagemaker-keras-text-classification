@@ -53,29 +53,31 @@ param_path = os.path.join(prefix, 'input/config/hyperparameters.json')
 channel_name='training'
 training_path = os.path.join(input_path, channel_name)
 
-label_index = {'b':0,'t':1,'e':2,'m':3}
-MAX_WORDS = 10000 # only consider the top 10,000 words in the dataset
+label_index = {'entertainment': 0, 'health': 1, 'sports': 2, 'us': 3, 'world': 4, 'technology': 5, 'politics': 6, 'science': 7, 'business': 8}
+MAX_WORDS = 100000 # only consider the top 10,000 words in the dataset
 WORD_INDEX = {}
 EMBEDDING_DIM = 100
-MAX_LEN = 100
+MAX_LEN = 10000
 
 def get_label_id(category):
   return label_index[category]
 
 def get_class_label(prediction):
-  for key, value in label_index.iteritems():
+  for key, value in label_index.items():
     if value == prediction[0]:
       return key
 
 def normalize_text(s):
+
+    # Extract spaces and punctuations with regex
+    token_pattern = r"(?u)\b\w\w+\b"
+    token_pattern = re.compile(token_pattern)
+
+    s = token_pattern.findall(s)
+
+    s = " ".join(s)
+
     s = s.lower()
-
-    # remove punctuation that is not word-internal (e.g., hyphens, apostrophes)
-    s = re.sub('\s\W',' ',s)
-    s = re.sub('\W\s',' ',s)
-
-    # make sure we didn't introduce any double spaces
-    s = re.sub('\s+',' ',s)
 
     return s
 
@@ -89,15 +91,15 @@ def train():
         with open(param_path, 'r') as tc:
             trainingParams = json.load(tc)
 
-        column_names = ["TITLE", "URL", "PUBLISHER", "CATEGORY", "STORY", "HOSTNAME", "TIMESTAMP"]
-        news_dataset = pd.read_csv(os.path.join(training_path, 'newsCorpora.csv'), names=column_names, header=None, delimiter='\t')
+        column_names = ["Category", "Text"]
+        news_dataset = pd.read_csv(os.path.join(training_path, 'newsCorpora.csv'), names=column_names, header=0)
         news_dataset = news_dataset.dropna()
         print(news_dataset.head())
 
         #remove punctuations and double spaces
-        texts = [normalize_text(s) for s in news_dataset['TITLE']]
+        texts = news_dataset['Text'].apply(normalize_text).values
         #convert category to a number
-        labels = [get_label_id(l) for l in news_dataset['CATEGORY']]
+        labels = news_dataset['Category'].apply(get_label_id).values
 
         tokenizer = Tokenizer(num_words=MAX_WORDS)
         tokenizer.fit_on_texts(texts) #texts contains the Title
@@ -128,7 +130,7 @@ def train():
                     embedding_matrix[i] = embedding_vector
 
         x_train, x_test, y_train, y_test = train_test_split(data, labels,
-                                                    test_size=0.2,
+                                                    test_size=0.1,
                                                     random_state=99)
         print("x_train shape: ", x_train.shape)
 
@@ -160,14 +162,14 @@ def train():
 
         #model.save_weights('pre_trained_glove_model.h5')
 
-        model.compile(optimizer='rmsprop',
-                      loss='categorical_crossentropy',
-                      metrics=['acc'])
+        model.compile(optimizer='adam',
+                      loss='sparse_categorical_crossentropy',
+                      metrics=['accuracy'])
         history = model.fit(x_train, y_train,
                             epochs=2,
                             verbose=2,
                             batch_size=32,
-                            validation_data=(x_test, y_test))
+                            validation_size=0.1)
 
 
         # save the model and the tokenizer
